@@ -939,11 +939,20 @@ ErrorBag.prototype.any = function any (scope) {
    * @param {String} scope The Scope name, optional.
    */
 ErrorBag.prototype.clear = function clear (scope) {
+    var this$1 = this;
+
   if (! scope) {
     scope = '__global__';
   }
 
-  this.errors = this.errors.filter(function (e) { return e.scope !== scope; });
+  var removeCondition = function (e) { return e.scope === scope; };
+
+  for (var i = 0; i < this.errors.length; ++i) {
+    if (removeCondition(this$1.errors[i])) {
+      this$1.errors.splice(i, 1);
+      --i;
+    }
+  }
 };
 
   /**
@@ -1012,7 +1021,7 @@ ErrorBag.prototype.first = function first (field, scope) {
     return this.firstByRule(selector.name, selector.rule, scope);
   }
 
-  for (var i = 0; i < this.errors.length; i++) {
+  for (var i = 0; i < this.errors.length; ++i) {
     if (this$1.errors[i].field === field && (this$1.errors[i].scope === scope)) {
       return this$1.errors[i].msg;
     }
@@ -1064,12 +1073,18 @@ ErrorBag.prototype.firstByRule = function firstByRule (name, rule, scope) {
    * @param {String} scope The Scope name, optional.
    */
 ErrorBag.prototype.remove = function remove (field, scope) {
-  var filter = scope ? (function (e) { return e.field !== field || e.scope !== scope; }) :
-                         (function (e) { return e.field !== field || e.scope !== '__global__'; });
+    var this$1 = this;
 
-  this.errors = this.errors.filter(filter);
+  var removeCondition = scope ? (function (e) { return e.field === field && e.scope === scope; }) :
+                                  (function (e) { return e.field === field && e.scope === '__global__'; });
+
+  for (var i = 0; i < this.errors.length; ++i) {
+    if (removeCondition(this$1.errors[i])) {
+      this$1.errors.splice(i, 1);
+      --i;
+    }
+  }
 };
-
 
   /**
    * Get the field attributes if there's a rule selector.
@@ -2359,15 +2374,7 @@ Validator.prototype.init = function init () {
  * @param {Object} flags
  */
 Validator.prototype.flag = function flag (name, flags) {
-  var ref = name.split('.');
-    var scope = ref[0];
-    var fieldName = ref[1];
-  if (!fieldName) {
-    fieldName = scope;
-    scope = null;
-  }
-  var field = scope ? getPath((scope + "." + fieldName), this.$scopes) :
-                        this.$scopes.__global__[fieldName];
+  var field = this._resolveField(name);
   if (! field) {
     return;
   }
@@ -2375,7 +2382,9 @@ Validator.prototype.flag = function flag (name, flags) {
   Object.keys(field.flags).forEach(function (flag) {
     field.flags[flag] = flags[flag] !== undefined ? flags[flag] : field.flags[flag];
   });
-  field.listeners.classes.sync();
+  if (field.listeners && field.listeners.classes) {
+    field.listeners.classes.sync();
+  }
 };
 
 /**
@@ -2537,7 +2546,7 @@ Validator.prototype.addScope = function addScope (scope) {
 
 Validator.prototype._resolveField = function _resolveField (name, scope) {
   if (name && name.indexOf('.') > -1) {
-    // no such field, try the scope form.
+    // if no such field, try the scope form.
     if (! this.$scopes.__global__[name]) {
       var assign$$1;
         (assign$$1 = name.split('.'), scope = assign$$1[0], name = assign$$1[1]);
@@ -3245,6 +3254,9 @@ ListenerGenerator.prototype._attachValidatorEvent = function _attachValidatorEve
   }
 };
 
+/**
+ * Gets a listener that listens on bound models instead of elements.
+ */
 ListenerGenerator.prototype._getModeledListener = function _getModeledListener () {
     var this$1 = this;
 
